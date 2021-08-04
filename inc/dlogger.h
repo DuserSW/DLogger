@@ -12,12 +12,13 @@
 
 
     Main features:
-    - auto file generation with date and time in name.
-    - logging into file with information about source file, line number and function.
-    - adding new line for log message if user forget. 
     - multithread safe but require pthread library (dependency from C11).
-    - functionlike macro for logging could be use in the same way like any printf.
+    - auto file generation with date and time in name.
+    - available to logging for different descriptors (uniq file, stdout, stderr) in the same time.
+    - adding new line for log message if user forget. 
     - different level of logging available for user.
+    - available to add timestamp and thread id into logs.
+    - functionlike macro for logging could be use in the same way like any printf.
 */
 
 
@@ -26,7 +27,7 @@
 
 /*
  * Available levels of logging in DLogger library. Remember that logging level set in constuctor will save only these messages which level 
- * is smaller or equal (all level <= level set in constructor)
+ * is smaller or equal (all level <= level set in constructor).
  *
  * DLOGGER_LEVEL_FATAL    - Fatal level error will occurs only if application needs to be immediately close. This kind of errors will not 
  *                          allow application to works correctly.
@@ -53,33 +54,99 @@
  * 
  * DLOGGER_LEVEL_MAX      - Turn on all levels of saving messages.
  */
-#define DLOGGER_LEVEL_FATAL    dlogger_level_fatal
-#define DLOGGER_LEVEL_CRITICAL dlogger_level_critical
-#define DLOGGER_LEVEL_ERROR    dlogger_level_error
-#define DLOGGER_LEVEL_WARNING  dlogger_level_warning
-#define DLOGGER_LEVEL_INFO     dlogger_level_info
-#define DLOGGER_LEVEL_DEBUG    dlogger_level_debug
-#define DLOGGER_LEVEL_MAX      dlogger_level_max
+#define DLOGGER_LEVEL_FATAL    DLOGGER_PRIV_LEVEL_FATAL
+#define DLOGGER_LEVEL_CRITICAL DLOGGER_PRIV_LEVEL_CRITICAL
+#define DLOGGER_LEVEL_ERROR    DLOGGER_PRIV_LEVEL_ERROR
+#define DLOGGER_LEVEL_WARNING  DLOGGER_PRIV_LEVEL_WARNING
+#define DLOGGER_LEVEL_INFO     DLOGGER_PRIV_LEVEL_INFO
+#define DLOGGER_LEVEL_DEBUG    DLOGGER_PRIV_LEVEL_DEBUG
+#define DLOGGER_LEVEL_MAX      DLOGGER_PRIV_LEVEL_MAX
+
+
+/*
+ * Available descriptors to save logs. DLogger is able to write for all descriptors in the same time.
+ *
+ * DLOGGER_OPTION_WRITE_TO_FILE   - write to uniq generated file basen on timestamp with date, time (with microseconds).
+ *
+ * DLOGGER_OPTION_WRITE_TO_STDOUT - write to standard output stream.
+ *
+ * DLOGGER_OPTION_WRITE_TO_STDERR - write to standard error stream.
+ */
+#define DLOGGER_OPTION_WRITE_TO_FILE   DLOGGER_PRIV_OPTION_WRITE_TO_FILE
+#define DLOGGER_OPTION_WRITE_TO_STDOUT DLOGGER_PRIV_OPTION_WRITE_TO_STDOUT
+#define DLOGGER_OPTION_WRITE_TO_STDERR DLOGGER_PRIV_OPTION_WRITE_TO_STDERR
+
+
+/*
+ * Available additional options for DLogger. These options could be compine with bitwise OR (|) operator.
+ *
+ * DLOGGER_OPTION_MARK_TIMESTAMP - save for each log timestamp which contain hourse, minuts, seconds and microseconds.
+ *
+ * DLOGGER_OPTION_MARK_THREADID  - save for each log thread id. Very useful information for multi-thread code.
+ */
+#define DLOGGER_OPTION_MARK_TIMESTAMP DLOGGER_PRIV_OPTION_MARK_TIMESTAMP
+#define DLOGGER_OPTION_MARK_THREADID  DLOGGER_PRIV_OPTION_MARK_THREADID
+
+
+/* Structure which contain options set by user by dedicated API. */
+typedef struct DLogger_user_optionsS DLogger_user_optionsS;
 
 
 /* 
- * This function initialize DLogger. Should be called only once and before any DLogger functions.
+ * This function create DLogger user options. Should be called only once and before any DLogger functions.
  *
- * @param[in] level - level of logging message into file. Functionlike macros only with level of message <= @level will be saved. 
+ * @param[in] - void.
+ * 
+ * @return pointer to DLogger_user_optionsS if success, otherwise NULL.
+ */
+DLogger_user_optionsS* dlogger_create_user_options(void);
+
+
+/* 
+ * This function destroy DLogger user options. Should be called after creating of DLogger to free memory 
+ * becuase in run-time we cannot change any option of DLogger.
+ *
+ * @param[in] user_options_p - pointer to options specified by user.
+ * 
+ * @return - void.
+ */
+void dlogger_destroy_user_options(DLogger_user_optionsS* user_options_p);
+
+
+/* 
+ * This function allows user to specify options for DLogger.
+ *
+ * @param[in] user_options_p      - pointer to options specified by user.
+ * @param[in] descriptor_to_write - which descriptor options @level_of_logging and @additional_options will be written.
+ * @param[in] level_of_logging    - level of logging for above @descriptor_to_write.
+ * @param[in] additional_options  - additional options available in DLogger.
+ * 
+ * @return - void.
+ */
+void dlogger_set_user_options(DLogger_user_optionsS* user_options_p, 
+                              DLogger_options_writeE descriptor_to_write, 
+                              DLogger_levelE level_of_logging, 
+                              DLogger_options_markE additional_options);
+
+
+/*
+ * This function create and initialize DLogger. Should be called only once and before any DLogger functions.
+ *
+ * @param[in] user_options_p - pointer to options specified by user.
  * 
  * @return 0 on succes, non-zero value on failure.
  */
-int dlogger_init(Dlogger_levelE level);
+int dlogger_create(const DLogger_user_optionsS* user_options_p);
 
 
 /* 
- * This function deinitialize DLogger. Should be called after DLogger init and logging functions.
+ * This function destroy DLogger. Should be called after DLogger create and logging functions.
  *
  * @param[in] - void
  * 
  * @return - void
  */
-void dlogger_deinit(void);
+void dlogger_destroy(void);
 
 
 /* 

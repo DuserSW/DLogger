@@ -1,4 +1,5 @@
 #include <dlogger.h>
+#include <sys/syscall.h>
 #include <sys/stat.h>
 #include <sys/time.h>
 #include <stdbool.h>
@@ -7,20 +8,44 @@
 #include <stdarg.h>
 #include <unistd.h>
 #include <stddef.h>
+#include <stdlib.h>
 #include <stdio.h>
 #include <fcntl.h>
 
 
-typedef struct DLogger_data
+#define DLOGGER_MAX_NR_OF_FD (3ULL)
+
+
+struct DLogger_user_optionsS
 {
-    mtx_t mutex;            /* main mutex to provide library thread safe. */
-    bool is_init;           /* is library initialized or not?             */
-    int log_descriptor;     /* file descriptor to write log messages.     */
-    Dlogger_levelE level;   /* level of logging                           */
-} DLogger_data;
+    bool is_filled : 1;   /* Are we able to use this these options for this file descriptor? */
+
+    int file_descriptor;  /* Available file descriptors: stdout, stderr, unique file. */
+
+    DLogger_levelE level; /* Level of logging. */
+
+    bool timestamp : 1;   /* Timestamp should be collected for messages? */
+    bool threadid : 1;    /* Thread ID should be collected for messages? */
+};
 
 
-static DLogger_data dlogger_priv_data;
+typedef struct DLogger_dataS
+{
+    struct
+    {
+        mtx_t mutex;  /* main mutex to provide library thread safe. */
+        bool is_init; /* is library initialized or not?             */
+    };
+
+    struct
+    {
+        /* user options for logging */
+        DLogger_user_optionsS user_options[DLOGGER_MAX_NR_OF_FD];
+    };
+} DLogger_dataS;
+
+
+static DLogger_dataS dlogger_priv_data;
 
 
 /* 
@@ -50,7 +75,7 @@ static size_t __dlogger_write_timestamp(size_t buffer_index, size_t buffer_size,
  * 
  * @return - number of bytes written into @buffer.
  */
-static size_t __dlogger_write_level(size_t buffer_index, size_t buffer_size, char buffer[static 1], Dlogger_levelE level);
+static size_t __dlogger_write_level(size_t buffer_index, size_t buffer_size, char buffer[static 1], DLogger_levelE level);
 
 
 /* 
@@ -65,10 +90,23 @@ static size_t __dlogger_write_level(size_t buffer_index, size_t buffer_size, cha
  * 
  * @return - number of bytes written into @buffer.
  */
-static size_t __dlogger_write_file_line_func(size_t buffer_index, size_t buffer_size, char buffer[static 1], 
-                                             const char* restrict file_p, int line, const char* restrict func_p);
+static size_t __dlogger_write_file_line_func(size_t buffer_index, size_t buffer_size, char buffer[static 1],
+                                             const char *restrict file_p, int line, const char *restrict func_p);
+
 
 /* 
+ * This function save into @buffer thread id..
+ *
+ * @param[in]     buffer_index - current buffer index where new data could be written.
+ * @param[in]     buffer_size  - size of buffer.
+ * @param[in/out] buffer       - pointer to first element of buffer.
+ * 
+ * @return - number of bytes written into @buffer.
+ */
+static size_t __dlogger_write_thread_id(size_t buffer_index, size_t buffer_size, char buffer[static 1]);
+
+
+/*
  * This function will add into @buffer additional newline if user forget.
  *
  * @param[in]     buffer_index - current buffer index where new data could be written.
@@ -78,6 +116,20 @@ static size_t __dlogger_write_file_line_func(size_t buffer_index, size_t buffer_
  * @return - void.
  */
 static void __dlogger_add_newline(size_t buffer_index, size_t buffer_size, char buffer[static 1]);
+
+
+/*
+ * This function will parse user options by using compund literals.
+ *
+ * @param[in] descriptor_to_write - which descriptor options @level_of_logging and @additional_options will be written.
+ * @param[in] level_of_logging    - level of logging for above @descriptor_to_write.
+ * @param[in] additional_options  - additional options available in DLogger.
+ *
+ * @return - parsed input into DLogger_user_optionsS.
+ */
+static inline DLogger_user_optionsS __dlogger_parse_user_option(DLogger_options_writeE descriptor_to_write,
+                                                                DLogger_levelE level_of_logging,
+                                                                DLogger_options_markE additional_options);
 
 
 static size_t __dlogger_write_timestamp(const size_t buffer_index, const size_t buffer_size, char buffer[const static 1],
@@ -98,7 +150,7 @@ static size_t __dlogger_write_timestamp(const size_t buffer_index, const size_t 
         return 0;
     }
 
-    const struct tm* const restrict datetime_now_p = localtime(&timeval_now.tv_sec);
+    const struct tm *const restrict datetime_now_p = localtime(&timeval_now.tv_sec);
 
     if (datetime_now_p == NULL)
     {
@@ -110,18 +162,18 @@ static size_t __dlogger_write_timestamp(const size_t buffer_index, const size_t 
 
     if (with_date == true)
     {
-        register const char* const restrict fmt_date_p = "%Y:%b:%d";
+        register const char *const restrict fmt_date_p = "%Y:%m:%d";
         written_bytes += strftime(&buffer[written_bytes], buffer_size - written_bytes, fmt_date_p, datetime_now_p);
     }
 
     if (with_h_min_sec == true)
     {
-        register const char* const restrict fmt_h_min_sec_p = (with_date == true) ? "-%H:%M:%S" : "%H:%M:%S";
+        register const char *const restrict fmt_h_min_sec_p = (with_date == true) ? "-%H:%M:%S" : "%H:%M:%S";
         written_bytes += strftime(&buffer[written_bytes], buffer_size - written_bytes, fmt_h_min_sec_p, datetime_now_p);
 
         if (with_usec == true)
         {
-            register const char* const restrict fmt_usec_p = ".%ld";
+            register const char *const restrict fmt_usec_p = ".%ld";
             written_bytes += (size_t)snprintf(&buffer[written_bytes], buffer_size - written_bytes, fmt_usec_p, (long)timeval_now.tv_usec);
         }
     }
@@ -130,8 +182,8 @@ static size_t __dlogger_write_timestamp(const size_t buffer_index, const size_t 
 }
 
 
-static size_t __dlogger_write_level(const size_t buffer_index, const size_t buffer_size, 
-                                    char buffer[const static 1], const Dlogger_levelE level)
+static size_t __dlogger_write_level(const size_t buffer_index, const size_t buffer_size,
+                                    char buffer[const static 1], const DLogger_levelE level)
 {
     if (buffer_index >= buffer_size)
     {
@@ -160,15 +212,15 @@ static size_t __dlogger_write_level(const size_t buffer_index, const size_t buff
     memset(&spaces_to_fill[0], space, sizeof(spaces_to_fill));
     spaces_to_fill[size - 1] = '\0';
 
-    register const char* const restrict fmt_p = "[%s]%s";
+    register const char *const restrict fmt_p = "[%s]%s";
 
-    return (size_t)snprintf(&buffer[buffer_index], buffer_size - buffer_index, 
+    return (size_t)snprintf(&buffer[buffer_index], buffer_size - buffer_index,
                             fmt_p, dlogger_priv_level_strings[level], &spaces_to_fill[0]);
 }
 
 
-static size_t __dlogger_write_file_line_func(const size_t buffer_index, const size_t buffer_size, char buffer[const static 1], 
-                                             const char* const restrict file_p, const int line, const char* const restrict func_p)
+static size_t __dlogger_write_file_line_func(const size_t buffer_index, const size_t buffer_size, char buffer[const static 1],
+                                             const char *const restrict file_p, const int line, const char *const restrict func_p)
 {
     if (buffer_index >= buffer_size)
     {
@@ -176,9 +228,26 @@ static size_t __dlogger_write_file_line_func(const size_t buffer_index, const si
         return 0;
     }
 
-    register const char* const restrict fmt_p = "%s:%d\t%s\t";
+    register const char* const restrict fmt_p = "[%s:%d %s] ";
 
     return (size_t)snprintf(&buffer[buffer_index], buffer_size - buffer_index, fmt_p, file_p, line, func_p);
+}
+
+
+static size_t __dlogger_write_thread_id(size_t buffer_index, size_t buffer_size, char buffer[static 1])
+{
+    if (buffer_index >= buffer_size)
+    {
+        perror("DLogger: end of internal buffer");
+        return 0;
+    }
+
+    register const pid_t thread_id = (pid_t)syscall(__NR_gettid);
+
+
+    register const char* const restrict fmt_p = "[TID %ld] ";
+
+    return (size_t)snprintf(&buffer[buffer_index], buffer_size - buffer_index, fmt_p, (long)thread_id);
 }
 
 
@@ -198,17 +267,33 @@ static void __dlogger_add_newline(const size_t buffer_index, const size_t buffer
 }
 
 
-int dlogger_init(const Dlogger_levelE level)
+static inline DLogger_user_optionsS __dlogger_parse_user_option(const DLogger_options_writeE descriptor_to_write,
+                                                                const DLogger_levelE level_of_logging,
+                                                                const DLogger_options_markE additional_options)
 {
-    if (dlogger_priv_data.is_init == true)
+    const int fd[] = 
     {
-        perror("DLogger: dlogger cannot be initialized more than once");
-        return 1;
-    }
+        [DLOGGER_OPTION_WRITE_TO_FILE] = -1,
+        [DLOGGER_OPTION_WRITE_TO_STDERR] = 2,
+        [DLOGGER_OPTION_WRITE_TO_STDOUT] = 1,
+    };
 
+    return (DLogger_user_optionsS){
+        .is_filled = true,
+        .file_descriptor = fd[descriptor_to_write],
+        .level = level_of_logging,
+        .timestamp = additional_options & DLOGGER_OPTION_MARK_TIMESTAMP,
+        .threadid = additional_options & DLOGGER_OPTION_MARK_THREADID,
+    };
+}
+
+
+static int __dlogger_try_create_unique_file(void)
+{
+    register int fd = -1;
     register size_t tries = 0;
     register const size_t max_tries = 10;
-    
+
     do
     {
         char filename_buffer[1 << 6] = {0};
@@ -219,15 +304,15 @@ int dlogger_init(const Dlogger_levelE level)
         register const bool with_usec = (tries > max_tries / 2) ? true : false;
 
         /* first generate timestamp, then add file extension */
-        filename_buffer_index += __dlogger_write_timestamp(filename_buffer_index, sizeof(filename_buffer), 
-                                                           &filename_buffer[0], with_date, with_h_min_sec, with_usec);
+        filename_buffer_index += __dlogger_write_timestamp(filename_buffer_index, sizeof(filename_buffer), &filename_buffer[0], 
+                                                           with_date, with_h_min_sec, with_usec);
         filename_buffer_index += (size_t)snprintf(&filename_buffer[filename_buffer_index], 
                                                   sizeof(filename_buffer) - filename_buffer_index, "%s", ".log");
 
         /* somehow this file name exist, we need to try more times */
         if (stat(&filename_buffer[0], &((struct stat){0})) != -1)
         {
-            fprintf(stderr, "DLogger: file name: %s already exist. We will try more time %zu/%zu\n", 
+            fprintf(stderr, "DLogger: file name: %s already exist. We will try more time %zu/%zu\n",
                     &filename_buffer[0], tries, max_tries);
 
             tries++;
@@ -235,15 +320,14 @@ int dlogger_init(const Dlogger_levelE level)
             continue;
         }
 
-        register int fd = -1;
         register const mode_t mode = S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH;
-        
+
         fd = creat(&filename_buffer[0], mode);
 
         if (fd == -1)
         {
             perror("DLogger: cannot create file");
-            return 1;
+            return -1;
         }
 
         register const int flags = O_WRONLY | O_TRUNC;
@@ -252,29 +336,124 @@ int dlogger_init(const Dlogger_levelE level)
         if (fd == -1)
         {
             perror("DLogger: cannot open file");
-            return 1;
+            return -1;
         }
 
-        dlogger_priv_data.log_descriptor = fd;
+        dlogger_priv_data.user_options[DLOGGER_OPTION_WRITE_TO_FILE].file_descriptor = fd;
         tries = max_tries;
 
     } while (tries < max_tries);
-    
+
+    return fd;
+}
+
+
+DLogger_user_optionsS* dlogger_create_user_options(void)
+{
+    DLogger_user_optionsS* user_options_p = calloc(DLOGGER_MAX_NR_OF_FD, sizeof(*user_options_p));
+
+    if (user_options_p == NULL)
+    {
+        perror("DLogger: calloc error");
+        return NULL;
+    }
+
+    for (size_t i = 0; i < DLOGGER_MAX_NR_OF_FD; ++i)
+    {
+        user_options_p[i].file_descriptor = -1;
+    }
+
+    return user_options_p;
+}
+
+
+void dlogger_destroy_user_options(DLogger_user_optionsS* user_options_p)
+{
+    free(user_options_p);
+    user_options_p = NULL;
+}
+
+
+void dlogger_set_user_options(DLogger_user_optionsS* const user_options_p,
+                              const DLogger_options_writeE descriptor_to_write,
+                              const DLogger_levelE level_of_logging,
+                              const DLogger_options_markE additional_options)
+{
+    if (user_options_p == NULL)
+    {
+        perror("DLogger: pass NULL pointer");
+        return;
+    }
+
+    if (dlogger_priv_data.is_init == true)
+    {
+        perror("DLogger: options can be specify before initialization");
+        return;
+    }
+
+    user_options_p[descriptor_to_write] = __dlogger_parse_user_option(descriptor_to_write, level_of_logging, additional_options);
+}
+
+
+int dlogger_create(const DLogger_user_optionsS* const user_options_p)
+{
+    if (dlogger_priv_data.is_init == true)
+    {
+        perror("DLogger: dlogger cannot be initialized more than once");
+        return 1;
+    }
+
+    register bool create_uniq_file = false;
+
+    if (user_options_p == NULL)
+    {
+        create_uniq_file = true;
+        dlogger_priv_data.user_options[DLOGGER_OPTION_WRITE_TO_FILE] = 
+            __dlogger_parse_user_option(DLOGGER_OPTION_WRITE_TO_FILE,
+                                        DLOGGER_LEVEL_MAX,
+                                        DLOGGER_OPTION_MARK_TIMESTAMP | DLOGGER_OPTION_MARK_THREADID);
+    }
+    else
+    {
+        if (user_options_p[DLOGGER_OPTION_WRITE_TO_FILE].is_filled == true)
+        {
+            create_uniq_file = true;
+        }
+
+        if (memcpy(&dlogger_priv_data.user_options[0], user_options_p, sizeof(dlogger_priv_data.user_options)) != &dlogger_priv_data.user_options[0])
+        {
+            perror("DLogger: memcpy error");
+            return -1;
+        }
+    }
+
+    if (create_uniq_file == true)
+    {
+        register const int fd = __dlogger_try_create_unique_file();
+
+        if (fd == -1)
+        {
+            perror("DLogger: cannot create or open log file");
+            return -1;
+        }
+
+        dlogger_priv_data.user_options[DLOGGER_OPTION_WRITE_TO_FILE].file_descriptor = fd;
+    }
+
     if (mtx_init(&dlogger_priv_data.mutex, mtx_plain) != thrd_success)
     {
         perror("DLogger: mutex cannot be initialized");
-        dlogger_priv_data.log_descriptor = -1;
-        return 1;
+        memset(&dlogger_priv_data, 0, sizeof(dlogger_priv_data));
+        return -1;
     }
-        
-    dlogger_priv_data.level = level;
+
     dlogger_priv_data.is_init = true;
 
     return 0;
 }
 
 
-void dlogger_deinit(void)
+void dlogger_destroy(void)
 {
     if (dlogger_priv_data.is_init == false)
     {
@@ -284,30 +463,28 @@ void dlogger_deinit(void)
 
     mtx_destroy(&dlogger_priv_data.mutex);
 
-    if (close(dlogger_priv_data.log_descriptor) == -1)
+    if (dlogger_priv_data.user_options[DLOGGER_OPTION_WRITE_TO_FILE].is_filled == true)
     {
-        perror("DLogger: cannot close log descriptor");
+        if (close(dlogger_priv_data.user_options[DLOGGER_OPTION_WRITE_TO_FILE].file_descriptor) == -1)
+        {
+            perror("DLogger: cannot close log descriptor");
+        }
     }
 
     memset(&dlogger_priv_data, 0, sizeof(dlogger_priv_data));
 }
 
 
-void __attribute__(( __format__ (__printf__, 5, 6)) ) __dlogger_print(const char* file_p, 
-                                                                      int line,
-                                                                      const char* func_p, 
-                                                                      const Dlogger_levelE level,
-                                                                      const char * const restrict format_p,
+void __attribute__(( __format__ (__printf__, 5, 6)) ) __dlogger_print(const char* const restrict file_p, 
+                                                                      const int line,
+                                                                      const char* const restrict func_p, 
+                                                                      const DLogger_levelE level,
+                                                                      const char* const restrict format_p,
                                                                       ...)
 {
     if (dlogger_priv_data.is_init == false)
     {
         perror("DLogger: first initialize DLogger");
-        return;
-    }
-
-    if (dlogger_priv_data.level < level)
-    {
         return;
     }
 
@@ -317,23 +494,50 @@ void __attribute__(( __format__ (__printf__, 5, 6)) ) __dlogger_print(const char
         return;
     }
 
-    static char buffer[1 << 15] = {0};
-    register size_t buffer_index = 0;
+    for (DLogger_options_writeE i = DLOGGER_OPTION_WRITE_TO_FILE; i <= DLOGGER_OPTION_WRITE_TO_STDOUT; ++i)
+    {
+        if (dlogger_priv_data.user_options[i].is_filled == false || 
+            dlogger_priv_data.user_options[i].level < level)
+        {
+            continue;
+        }
 
-    buffer_index += __dlogger_write_file_line_func(buffer_index, sizeof(buffer), &buffer[0], file_p, line, func_p);
-    buffer_index += __dlogger_write_level(buffer_index, sizeof(buffer), &buffer[0], level);
+        static char buffer[1 << 15] = {0};
+        register size_t buffer_index = 0;
 
-    /* Not moved to another functions because it will be triumph of form over content with passing format and variadic arguments. */
-    va_list args;
-    va_start(args, format_p);
+        buffer_index += __dlogger_write_level(buffer_index, sizeof(buffer), &buffer[0], level);
 
-    buffer_index += (size_t)vsnprintf(&buffer[buffer_index], sizeof(buffer) - buffer_index, format_p, args);
+        if (dlogger_priv_data.user_options[i].timestamp == true)
+        {
+            register const bool with_date = false;
+            register const bool with_h_min_sec = true;
+            register const bool with_usec = true;
 
-    va_end(args);
+            buffer[buffer_index++] = '[';
+            buffer_index += __dlogger_write_timestamp(buffer_index, sizeof(buffer), &buffer[0], with_date, with_h_min_sec, with_usec);
+            buffer[buffer_index++] = ']';
+            buffer[buffer_index++] = ' ';
+        }
+            
+        if (dlogger_priv_data.user_options[i].threadid == true)
+        {
+            buffer_index += __dlogger_write_thread_id(buffer_index, sizeof(buffer), &buffer[0]);      
+        }
 
-    __dlogger_add_newline(buffer_index, sizeof(buffer), &buffer[0]);
+        buffer_index += __dlogger_write_file_line_func(buffer_index, sizeof(buffer), &buffer[0], file_p, line, func_p);
 
-    dprintf(dlogger_priv_data.log_descriptor, "%s", &buffer[0]);
+        /* Not moved to another functions because it will be triumph of form over content with passing format and variadic arguments. */
+        va_list args;
+        va_start(args, format_p);
+
+        buffer_index += (size_t)vsnprintf(&buffer[buffer_index], sizeof(buffer) - buffer_index, format_p, args);
+
+        va_end(args);
+
+        __dlogger_add_newline(buffer_index, sizeof(buffer), &buffer[0]);
+
+        dprintf(dlogger_priv_data.user_options[i].file_descriptor, "%s", &buffer[0]);
+    }
 
     mtx_unlock(&dlogger_priv_data.mutex);
 }
