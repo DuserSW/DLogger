@@ -15,12 +15,17 @@ static void example_all_descriptors(void);
  *
  *
  * Contents of log file:
- * [FATAL]    [12:40:27.734058] [TID 7705] [test/dlogger_test.c:24	example_default] Message 1
- * [CRITICAL] [12:40:27.734198] [TID 7705] [test/dlogger_test.c:25	example_default] Message 2
- * [ERROR]    [12:40:27.734244] [TID 7705] [test/dlogger_test.c:26	example_default] Message 3
- * [WARNING]  [12:40:27.734273] [TID 7705] [test/dlogger_test.c:27	example_default] Message 4
- * [INFO]     [12:40:27.734300] [TID 7705] [test/dlogger_test.c:28	example_default] Message 5
- * [DEBUG]    [12:40:27.734325] [TID 7705] [test/dlogger_test.c:29	example_default] Message 6
+ * [FATAL]    [15:19:19.526156] [TID 17839] [test/dlogger_test.c:31 example_default] Message 1
+ * Backtrace:
+ * ./test.out(+0x1f6d) [0x56534b5b5f6d]
+ * ./test.out(+0x1398) [0x56534b5b5398]
+ * /lib/x86_64-linux-gnu/libc.so.6(__libc_start_main+0xf3) [0x7f7ffebab0b3]
+ * ./test.out(+0x14ae) [0x56534b5b54ae]
+ * [CRITICAL] [15:19:19.526611] [TID 17839] [test/dlogger_test.c:32 example_default] Message 2
+ * [ERROR]    [15:19:19.526649] [TID 17839] [test/dlogger_test.c:33 example_default] Message 3
+ * [WARNING]  [15:19:19.526674] [TID 17839] [test/dlogger_test.c:34 example_default] Message 4
+ * [INFO]     [15:19:19.526698] [TID 17839] [test/dlogger_test.c:35 example_default] Message 5
+ * [DEBUG]    [15:19:19.526722] [TID 17839] [test/dlogger_test.c:36 example_default] Message 6
  */
 static void example_default(void)
 {
@@ -48,10 +53,15 @@ static void example_default(void)
  *
  *
  * Contents of stdout:
- * [FATAL]    [13:32:37.984017] [test/dlogger_test.c:62	example_only_stdout] Message 1
- * [CRITICAL] [13:32:37.984309] [test/dlogger_test.c:63	example_only_stdout] Message 2
- * [ERROR]    [13:32:37.984342] [test/dlogger_test.c:64	example_only_stdout] Message 3
- * [WARNING]  [13:32:37.984375] [test/dlogger_test.c:65	example_only_stdout] Message 4
+ * [FATAL]    [15:20:59.977256] [test/dlogger_test.c:74 example_only_stdout] Message 1
+ * Backtrace:
+ * ./test.out(+0x1f9d) [0x5560a3efef9d]
+ * ./test.out(+0x13bd) [0x5560a3efe3bd]
+ * /lib/x86_64-linux-gnu/libc.so.6(__libc_start_main+0xf3) [0x7f706e7170b3]
+ * ./test.out(+0x14de) [0x5560a3efe4de]
+ * [CRITICAL] [15:20:59.978115] [test/dlogger_test.c:75 example_only_stdout] Message 2
+ * [ERROR]    [15:20:59.978182] [test/dlogger_test.c:76 example_only_stdout] Message 3
+ * [WARNING]  [15:20:59.978238] [test/dlogger_test.c:77 example_only_stdout] Message 4
  */
 static void example_only_stdout(void)
 {
@@ -83,18 +93,28 @@ static void example_only_stdout(void)
  *
  * 
  * Contants of uniq file:
- * [FATAL]    [14:23:45.625824] [TID 9723] [test/dlogger_test.c:102 example_file_and_stderr] Message 1
- * [CRITICAL] [14:23:45.625942] [TID 9723] [test/dlogger_test.c:103 example_file_and_stderr] Message 2
- * [ERROR]    [14:23:45.626012] [TID 9723] [test/dlogger_test.c:104 example_file_and_stderr] Message 3
- * [WARNING]  [14:23:45.626069] [TID 9723] [test/dlogger_test.c:105 example_file_and_stderr] Message 4
- * [INFO]     [14:23:45.626099] [TID 9723] [test/dlogger_test.c:106 example_file_and_stderr] Message 5
- * [DEBUG]    [14:23:45.626176] [TID 9723] [test/dlogger_test.c:107 example_file_and_stderr] Message 6
+ * [FATAL]    [15:22:28.24314] [TID 18031] [test/dlogger_test.c:126 example_file_and_stderr] Message 1
+ * Backtrace:
+ * ./test.out(+0x1fad) [0x557137bd4fad]
+ * ./test.out(+0x13d1) [0x557137bd43d1]
+ * /lib/x86_64-linux-gnu/libc.so.6(__libc_start_main+0xf3) [0x7fe4c80eb0b3]
+ * ./test.out(+0x14ee) [0x557137bd44ee]
+ * [CRITICAL] [15:22:28.25116] [TID 18031] [test/dlogger_test.c:127 example_file_and_stderr] Message 2
+ * [ERROR]    [15:22:28.25214] [TID 18031] [test/dlogger_test.c:128 example_file_and_stderr] Message 3
+ * [WARNING]  [15:22:28.25299] [TID 18031] [test/dlogger_test.c:129 example_file_and_stderr] Message 4
+ * [INFO]     [15:22:28.25343] [TID 18031] [test/dlogger_test.c:130 example_file_and_stderr] Message 5
+ * [DEBUG]    [15:22:28.25382] [TID 18031] [test/dlogger_test.c:131 example_file_and_stderr] Message 6
  *
  *
  * Contents of stderr:
- * [FATAL]    [13:32:37.984017] [test/dlogger_test.c:62	example_file_and_stderr] Message 1
- * [CRITICAL] [13:32:37.984309] [test/dlogger_test.c:63	example_file_and_stderr] Message 2
- * [ERROR]    [13:32:37.984342] [test/dlogger_test.c:64	example_file_and_stderr] Message 3
+ * [FATAL]    [15:22:28.24900] [TID 18031] [test/dlogger_test.c:126 example_file_and_stderr] Message 1
+ * Backtrace:
+ * ./test.out(+0x1fad) [0x557137bd4fad]
+ * ./test.out(+0x13d1) [0x557137bd43d1]
+ * /lib/x86_64-linux-gnu/libc.so.6(__libc_start_main+0xf3) [0x7fe4c80eb0b3]
+ * ./test.out(+0x14ee) [0x557137bd44ee]
+ * [CRITICAL] [15:22:28.25170] [TID 18031] [test/dlogger_test.c:127 example_file_and_stderr] Message 2
+ * [ERROR]    [15:22:28.25255] [TID 18031] [test/dlogger_test.c:128 example_file_and_stderr] Message 3
  */
 static void example_file_and_stderr(void)
 {
@@ -130,22 +150,37 @@ static void example_file_and_stderr(void)
  *
  * 
  * Contants of uniq file:
- * [FATAL]    [14:23:45.625824] [TID 9723] [test/dlogger_test.c:102 example_file_and_stderr] Message 1
- * [CRITICAL] [14:23:45.625942] [TID 9723] [test/dlogger_test.c:103 example_file_and_stderr] Message 2
- * [ERROR]    [14:23:45.626012] [TID 9723] [test/dlogger_test.c:104 example_file_and_stderr] Message 3
- * [WARNING]  [14:23:45.626069] [TID 9723] [test/dlogger_test.c:105 example_file_and_stderr] Message 4
- * [INFO]     [14:23:45.626099] [TID 9723] [test/dlogger_test.c:106 example_file_and_stderr] Message 5
- * [DEBUG]    [14:23:45.626176] [TID 9723] [test/dlogger_test.c:107 example_file_and_stderr] Message 6
+ * [FATAL]    [15:24:14.569410] [TID 18094] [test/dlogger_test.c:191 example_all_descriptors] Message 1
+ * Backtrace:
+ * ./test.out(+0x1fbd) [0x5563641affbd]
+ * ./test.out(+0x13e5) [0x5563641af3e5]
+ * /lib/x86_64-linux-gnu/libc.so.6(__libc_start_main+0xf3) [0x7fd5e86aa0b3]
+ * ./test.out(+0x14fe) [0x5563641af4fe]
+ * [CRITICAL] [15:24:14.570618] [TID 18094] [test/dlogger_test.c:192 example_all_descriptors] Message 2
+ * [ERROR]    [15:24:14.570738] [TID 18094] [test/dlogger_test.c:193 example_all_descriptors] Message 3
+ * [WARNING]  [15:24:14.570835] [TID 18094] [test/dlogger_test.c:194 example_all_descriptors] Message 4
+ * [INFO]     [15:24:14.570882] [TID 18094] [test/dlogger_test.c:195 example_all_descriptors] Message 5
+ * [DEBUG]    [15:24:14.570938] [TID 18094] [test/dlogger_test.c:196 example_all_descriptors] Message 6
  *
  *
  * Contents of stdout:
- * [FATAL]    [13:42:11.579405] [TID 14905] [test/dlogger_test.c:167 example_all_descriptors] Message 1
- * [CRITICAL] [13:42:11.579538] [TID 14905] [test/dlogger_test.c:168 example_all_descriptors] Message 2
- * [ERROR]    [13:42:11.579655] [TID 14905] [test/dlogger_test.c:169 example_all_descriptors] Message 3
+ * [FATAL]    [15:24:14.570384] [TID 18094] [test/dlogger_test.c:191 example_all_descriptors] Message 1
+ * Backtrace:
+ * ./test.out(+0x1fbd) [0x5563641affbd]
+ * ./test.out(+0x13e5) [0x5563641af3e5]
+ * /lib/x86_64-linux-gnu/libc.so.6(__libc_start_main+0xf3) [0x7fd5e86aa0b3]
+ * ./test.out(+0x14fe) [0x5563641af4fe]
+ * [CRITICAL] [15:24:14.570682] [TID 18094] [test/dlogger_test.c:192 example_all_descriptors] Message 2
+ * [ERROR]    [15:24:14.570784] [TID 18094] [test/dlogger_test.c:193 example_all_descriptors] Message 3
  *
  *
  * Contents of stderr:
- * [FATAL]    [13:44:21.512584] [TID 14925] [test/dlogger_test.c:167 example_all_descriptors] Message 1
+ * [FATAL]    [15:24:14.570123] [TID 18094] [test/dlogger_test.c:191 example_all_descriptors] Message 1
+ * Backtrace:
+ * ./test.out(+0x1fbd) [0x5563641affbd]
+ * ./test.out(+0x13e5) [0x5563641af3e5]
+ * /lib/x86_64-linux-gnu/libc.so.6(__libc_start_main+0xf3) [0x7fd5e86aa0b3]
+ * ./test.out(+0x14fe) [0x5563641af4fe]
  */
 static void example_all_descriptors(void)
 {

@@ -2,6 +2,7 @@
 #include <sys/syscall.h>
 #include <sys/stat.h>
 #include <sys/time.h>
+#include <execinfo.h>
 #include <stdbool.h>
 #include <threads.h>
 #include <string.h>
@@ -95,7 +96,7 @@ static size_t __dlogger_write_file_line_func(size_t buffer_index, size_t buffer_
 
 
 /* 
- * This function save into @buffer thread id..
+ * This function save into @buffer thread id.
  *
  * @param[in]     buffer_index - current buffer index where new data could be written.
  * @param[in]     buffer_size  - size of buffer.
@@ -104,6 +105,18 @@ static size_t __dlogger_write_file_line_func(size_t buffer_index, size_t buffer_
  * @return - number of bytes written into @buffer.
  */
 static size_t __dlogger_write_thread_id(size_t buffer_index, size_t buffer_size, char buffer[static 1]);
+
+
+/* 
+ * This function save into @buffer backtrace from application.
+ *
+ * @param[in]     buffer_index - current buffer index where new data could be written.
+ * @param[in]     buffer_size  - size of buffer.
+ * @param[in/out] buffer       - pointer to first element of buffer.
+ * 
+ * @return - number of bytes written into @buffer.
+ */
+static size_t __dlogger_write_backtrace(size_t buffer_index, size_t buffer_size, char buffer[static 1]);
 
 
 /*
@@ -248,6 +261,42 @@ static size_t __dlogger_write_thread_id(size_t buffer_index, size_t buffer_size,
     register const char* const restrict fmt_p = "[TID %ld] ";
 
     return (size_t)snprintf(&buffer[buffer_index], buffer_size - buffer_index, fmt_p, (long)thread_id);
+}
+
+
+static size_t __dlogger_write_backtrace(const size_t buffer_index, const size_t buffer_size, char buffer[const static 1])
+{
+    if (buffer_index >= buffer_size)
+    {
+        perror("DLogger: end of internal buffer");
+        return 0;
+    }
+
+    register int backtrace_size = 100;
+    void* backtrace_buffer[backtrace_size];
+
+    register const int number_of_frames = backtrace(&backtrace_buffer[0], backtrace_size);
+
+    char** backtrace_strings = backtrace_symbols(&backtrace_buffer[0], number_of_frames);
+
+    if (backtrace_strings == NULL)
+    {
+        perror("DLogger: error with backtrace symbols");
+        return 0;
+    }
+
+    register size_t bytes_written = buffer_index;
+
+    bytes_written += (size_t)snprintf(&buffer[bytes_written], buffer_size - bytes_written, "Backtrace:\n");
+
+    for (size_t i = 0; i < (size_t)number_of_frames; ++i)
+    {
+        bytes_written += (size_t)snprintf(&buffer[bytes_written], buffer_size - bytes_written, "%s\n", backtrace_strings[i]);
+    }
+
+    free(backtrace_strings);
+
+    return bytes_written - buffer_index;
 }
 
 
@@ -535,6 +584,11 @@ void __attribute__(( __format__ (__printf__, 5, 6)) ) __dlogger_print(const char
         va_end(args);
 
         __dlogger_add_newline(buffer_index, sizeof(buffer), &buffer[0]);
+
+        if (level == DLOGGER_LEVEL_FATAL)
+        {
+            buffer_index += __dlogger_write_backtrace(buffer_index, sizeof(buffer), &buffer[0]);  
+        }
 
         dprintf(dlogger_priv_data.user_options[i].file_descriptor, "%s", &buffer[0]);
     }

@@ -18,6 +18,7 @@
     - adding new line for log message if user forget. 
     - different level of logging available for user.
     - available to add timestamp and thread id into logs.
+    - for fatal level problems the backtrace will be save. Use flag -rdynamic to compilation to get full backtrace.
     - functionlike macro for logging could be use in the same way like any printf.
 */
 
