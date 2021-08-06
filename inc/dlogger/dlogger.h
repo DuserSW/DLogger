@@ -151,6 +151,15 @@ void dlogger_destroy(void);
 
 
 /* 
+ * This define works in the same way like NDEBUG introduced for macro assert from assert.h. If you want to 
+ * compile your application to release version, use this define to turn-off functionlike macros for logging. 
+ *
+ * Please remember that dlogger_log_fatal will be still working. If you want to turn-off fatal functionlike macro 
+ * as well, please define additionally DLOGGER_SILENT_FATAL. Then all logging functionlike macros will be turn off.
+ */
+#ifndef NDEBUG
+
+/* 
  * This functionlike macro is responsible for logging messages into file. Can be use in the same way like printf.
  *
  * @param[in] - variadic arguments.
@@ -164,5 +173,24 @@ void dlogger_destroy(void);
 #define dlogger_log_info(...)     dlogger_priv_log_info(__VA_ARGS__)
 #define dlogger_log_debug(...)    dlogger_priv_log_debug(__VA_ARGS__)
 
+#else
+
+#ifndef DLOGGER_SILENT_FATAL 
+
+#define dlogger_log_fatal(...)    dlogger_priv_log_fatal(__VA_ARGS__)
+
+#else
+
+#define dlogger_log_fatal(...)
+
+#endif /* DLOGGER_SILENT_FATAL */
+
+#define dlogger_log_critical(...)
+#define dlogger_log_error(...)
+#define dlogger_log_warning(...)
+#define dlogger_log_info(...)
+#define dlogger_log_debug(...)
+
+#endif /* NDEBUG */
 
 #endif /* DLOGGER_H */
