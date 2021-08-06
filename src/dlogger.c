@@ -1,4 +1,4 @@
-#include <dlogger.h>
+#include <dlogger/dlogger.h>
 #include <sys/syscall.h>
 #include <sys/stat.h>
 #include <sys/time.h>
@@ -247,7 +247,7 @@ static size_t __dlogger_write_file_line_func(const size_t buffer_index, const si
 }
 
 
-static size_t __dlogger_write_thread_id(size_t buffer_index, size_t buffer_size, char buffer[static 1])
+static size_t __dlogger_write_thread_id(const size_t buffer_index, const size_t buffer_size, char buffer[const static 1])
 {
     if (buffer_index >= buffer_size)
     {
@@ -272,14 +272,18 @@ static size_t __dlogger_write_backtrace(const size_t buffer_index, const size_t 
         return 0;
     }
 
-    register int backtrace_size = 100;
+    /* 
+     * If we save backtrace_size as: register const int we get clang warning: "variable length array folded to constant array as an extension"
+     * Simple workaround is just use enum or define.
+     */
+    enum { backtrace_size = 128 };
     void* backtrace_buffer[backtrace_size];
 
     register const int number_of_frames = backtrace(&backtrace_buffer[0], backtrace_size);
 
-    char** backtrace_strings = backtrace_symbols(&backtrace_buffer[0], number_of_frames);
+    char** backtrace_strings_pp = backtrace_symbols(&backtrace_buffer[0], number_of_frames);
 
-    if (backtrace_strings == NULL)
+    if (backtrace_strings_pp == NULL)
     {
         perror("DLogger: error with backtrace symbols");
         return 0;
@@ -291,10 +295,10 @@ static size_t __dlogger_write_backtrace(const size_t buffer_index, const size_t 
 
     for (size_t i = 0; i < (size_t)number_of_frames; ++i)
     {
-        bytes_written += (size_t)snprintf(&buffer[bytes_written], buffer_size - bytes_written, "%s\n", backtrace_strings[i]);
+        bytes_written += (size_t)snprintf(&buffer[bytes_written], buffer_size - bytes_written, "%s\n", backtrace_strings_pp[i]);
     }
 
-    free(backtrace_strings);
+    free(backtrace_strings_pp);
 
     return bytes_written - buffer_index;
 }

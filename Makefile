@@ -36,6 +36,7 @@ endif
 SDIR := ./src
 IDIR := ./inc
 TDIR := ./test
+SCRIPT_DIR := ./scripts
 
 
 # Files
@@ -54,7 +55,7 @@ LIB := pthread
 
 
 # Binary files
-TEXEC := test.out
+TEXEC := test_dlogger.out
 LIB_NAME := libdlogger.a
 
 
@@ -88,6 +89,14 @@ endif
 C_FLAGS = $(C_STD) $(C_OPT) $(C_WARN) $(GGDB)
 
 
+# Path for installation script
+INSTALL_PATH = 
+
+ifeq ("$(origin P)", "command line")
+	INSTALL_PATH = $(P)
+endif 
+
+
 # Headers and library for linker
 H_INC := $(foreach d, $(IDIR), -I$d)
 L_INC := $(foreach l, $(LIB), -l$l)
@@ -103,6 +112,9 @@ $(LIB_NAME): $(LOBJ)
 	$(Q)$(AR) $@ $^
 
 test: $(TEXEC)
+
+install:
+	$(Q)$(SCRIPT_DIR)/install_dlogger.sh $(INSTALL_PATH)
 
 $(TEXEC): $(TOBJ)
 	$(call print_bin,$@)
