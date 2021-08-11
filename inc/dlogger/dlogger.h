@@ -20,6 +20,7 @@
     - available to add timestamp and thread id into logs.
     - for fatal level problems the backtrace will be save. Use flag -rdynamic to compilation to get full backtrace.
     - functionlike macro for logging could be use in the same way like any printf.
+    - turn off all (with/without FATAL) log functionslike macros for release version.
 */
 
 
